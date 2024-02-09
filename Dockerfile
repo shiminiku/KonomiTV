@@ -52,7 +52,7 @@ RUN yarn build
 
 # Ubuntu 22.04 LTS (with CUDA) をベースイメージとして利用
 # CUDA 付きなのは NVEncC を動かせるようにするため
-FROM nvcr.io/nvidia/cuda:11.7.1-runtime-ubuntu22.04
+FROM ubuntu:22.04
 
 # タイムゾーンを東京に設定
 ENV TZ=Asia/Tokyo
@@ -63,17 +63,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Intel QSV と AMD VCE 関連のライブラリのインストール（実行時イメージなので RUN の最後に掃除する）
 ## amdgpu 周りのインストール方法は amdgpu-install パッケージに同梱されているファイル群を参考にした
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git gpg tzdata && \
-    curl -fsSL https://repositories.intel.com/graphics/intel-graphics.key | gpg --dearmor -o /usr/share/keyrings/intel-graphics-keyring.gpg && \
-    curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor -o /usr/share/keyrings/rocm-keyring.gpg && \
-    echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics-keyring.gpg] https://repositories.intel.com/graphics/ubuntu jammy arc' > /etc/apt/sources.list.d/intel-graphics.list && \
-    echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/rocm-keyring.gpg] https://repo.radeon.com/amdgpu/22.20.1/ubuntu jammy main' > /etc/apt/sources.list.d/amdgpu.list && \
-    echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/rocm-keyring.gpg] https://repo.radeon.com/amdgpu/22.20.1/ubuntu jammy proprietary' > /etc/apt/sources.list.d/amdgpu-proprietary.list && \
-    echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/rocm-keyring.gpg] https://repo.radeon.com/rocm/apt/5.2 ubuntu main' > /etc/apt/sources.list.d/rocm.list && \
-    apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
-        libfontconfig1 libfreetype6 libfribidi0 \
-        intel-media-va-driver-non-free intel-opencl-icd libigfxcmrt7 libmfx1 libmfxgen1 libva-drm2 libva-x11-2 ocl-icd-opencl-dev \
-        amf-amdgpu-pro libamdenc-amdgpu-pro libdrm2-amdgpu vulkan-amdgpu-pro rocm-opencl-runtime opencl-legacy-amdgpu-pro-icd && \
     apt-get -y autoremove && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/* && \
