@@ -6,6 +6,7 @@ from __future__ import annotations
 import aiofiles
 import aiohttp
 import asyncio
+import httpx
 import gc
 import os
 import re
@@ -17,7 +18,7 @@ from typing import AsyncIterator, cast, ClassVar, Literal, TYPE_CHECKING
 
 from app import logging
 from app.config import Config
-from app.constants import API_REQUEST_HEADERS, LIBRARY_PATH, LOGS_DIR, QUALITY, QUALITY_TYPES
+from app.constants import API_REQUEST_HEADERS, HTTPX_CLIENT, LIBRARY_PATH, LOGS_DIR, QUALITY, QUALITY_TYPES
 from app.models.Channel import Channel
 from app.streams.LivePSIDataArchiver import LivePSIDataArchiver
 from app.utils import GetMirakurunAPIEndpointURL
@@ -84,8 +85,8 @@ class LiveEncodingTask:
         """
 
         # 地デジでフル HD 放送を行っているチャンネルのネットワーク ID と一致する
-        ## テレビ宮崎, あいテレビ, びわ湖放送, 奈良テレビ, KBS京都, KNB北日本放送, とちぎテレビ, ABS秋田放送
-        if network_id in [31811, 31940, 32038, 32054, 32102, 32162, 32311, 32466]:
+        ## テレビ宮崎, あいテレビ, びわ湖放送, KBS京都, KNB北日本放送, とちぎテレビ, ABS秋田放送
+        if network_id in [31811, 31940, 32038, 32102, 32162, 32311, 32466]:
             return True
 
         # BS でフル HD 放送を行っているチャンネルのサービス ID と一致する
@@ -399,12 +400,73 @@ class LiveEncodingTask:
         return result
 
 
+    async def acquireMirakurunTuner(self, channel_type: Literal['GR', 'BS', 'CS', 'CATV', 'SKY', 'STARDIGIO']) -> bool:
+        """
+        Mirakurun / mirakc で空きチューナーを確保できるまで待機する
+        mirakc は空きチューナーがない場合に 404 を返すので (バグ？) 、それを避けるために予め空きチューナーがあるかどうかを確認する
+        0.5 秒間待機しても空きチューナーがなければ False を返す (共聴できる場合もあるので、受信できないとは限らない)
+
+        Args:
+            channel_type (Literal['GR', 'BS', 'CS', 'CATV', 'SKY', 'STARDIGIO']): チャンネルタイプ
+
+        Returns:
+            bool: チューナーを確保できたかどうか
+        """
+
+        CONFIG = Config()
+        BACKEND_TYPE: Literal['EDCB', 'Mirakurun'] = 'Mirakurun' if CONFIG.general.always_receive_tv_from_mirakurun is True else CONFIG.general.backend
+        assert BACKEND_TYPE == 'Mirakurun', 'This method is only for Mirakurun backend.'
+
+        # Mirakurun はチャンネルタイプが GR, BS, CS, SKY しかないので、CATV を CS に、STARDIGIO を SKY に変換する
+        channel_type = 'CS' if channel_type == 'CATV' else channel_type
+        channel_type = 'SKY' if channel_type == 'STARDIGIO' else channel_type
+
+        async with HTTPX_CLIENT() as client:
+
+            # 0.1 秒間隔で最大 0.5 秒間チューナーの空きを確認する
+            ## 空きチューナーがなくても利用状況によっては共聴できるので、あまり待ちすぎると無駄な時間がかかる
+            ## Mirakurun / mirakc はチャンネル切り替え時に 1 秒弱使い終わった前チャンネルのチューナープロセスが残るので、シングルチューナー環境では
+            ## それを解放し終わってからチューナーを起動できるようにする (実際はだいたい 0.25 秒程度で空きチューナーを確保できる)
+            ## 複数チューナーがある場合は他の空きチューナーを使って起動できるため、待ち時間はほとんどかからない
+            start_time = time.time()
+            for _ in range(int(0.5 / 0.1)):
+
+                # Mirakurun / mirakc からチューナーの状態を取得
+                try:
+                    response = await client.get(GetMirakurunAPIEndpointURL('/api/tuners'), timeout=5)
+                    tuners = response.json()
+                except httpx.NetworkError:
+                    logging.error(f'Failed to get tuner statuses from Mirakurun / mirakc. (Network Error)')
+                    return False
+                except httpx.TimeoutException:
+                    logging.error(f'Failed to get tuner statuses from Mirakurun / mirakc. (Connection Timeout)')
+                    return False
+
+                # 指定されたチャンネルタイプが受信可能なチューナーが1つでも利用可能であれば True を返す
+                for tuner in tuners:
+                    if tuner['isAvailable'] is True and tuner['isFree'] is True and channel_type in tuner['types']:
+                        logging.info('Acquired a tuner from Mirakurun / mirakc.')
+                        logging.info(f'Tuner: {tuner["name"]} / Type: {channel_type}) / Acquired in {round(time.time() - start_time, 2)} seconds')
+                        return True
+
+                await asyncio.sleep(0.1)
+
+        # 空きチューナーは確保できなかったが、同じチャンネルが受信中であれば共聴することは可能なので warning に留める
+        logging.warning(f'Failed to acquire a tuner from Mirakurun / mirakc.')
+        logging.warning(f'If the same channel is being received, it can be shared with the same tuner.')
+        return False
+
+
     async def run(self) -> None:
         """
         エンコードタスクを実行する
         """
 
         CONFIG = Config()
+
+        # バックエンドの種類を取得
+        ## always_receive_tv_from_mirakurun が True なら、バックエンドに関わらず常に Mirakurun から受信する
+        BACKEND_TYPE: Literal['EDCB', 'Mirakurun'] = 'Mirakurun' if CONFIG.general.always_receive_tv_from_mirakurun is True else CONFIG.general.backend
 
         # エンコーダーの種類を取得
         ENCODER_TYPE = CONFIG.general.encoder
@@ -452,7 +514,8 @@ class LiveEncodingTask:
             '-b', '5',
             # 字幕ストリームが常に存在する状態にする
             ## ストリームが存在しない場合、PMT の項目が補われて出力される
-            '-c', '1',
+            ## 実際の字幕データが現れない場合に5秒ごとに非表示の適当なデータを挿入する
+            '-c', '5',
             # 文字スーパーストリームが常に存在する状態にする
             ## ストリームが存在しない場合、PMT の項目が補われて出力される
             '-u', '1',
@@ -553,20 +616,23 @@ class LiveEncodingTask:
         session: aiohttp.ClientSession | None = None
 
         # Mirakurun バックエンド
-        if CONFIG.general.backend == 'Mirakurun':
+        if BACKEND_TYPE == 'Mirakurun':
+
+            # チューナーを確保できるまで待機する
+            ## 確保できなかった場合でも共聴で受信できる可能性があるので、戻り値は無視する
+            self.live_stream.setStatus('Standby', 'チューナーを確保しています…')
+            await self.acquireMirakurunTuner(channel.type)
 
             # Mirakurun 形式のサービス ID
             # NID と SID を 5 桁でゼロ埋めした上で int に変換する
             mirakurun_service_id = int(str(channel.network_id).zfill(5) + str(channel.service_id).zfill(5))
-            # Mirakurun API の URL を作成
-            mirakurun_stream_api_url = GetMirakurunAPIEndpointURL(f'/api/services/{mirakurun_service_id}/stream')
 
             # Mirakurun の Service Stream API へ HTTP リクエストを開始
             self.live_stream.setStatus('Standby', 'チューナーを起動しています…')
             session = aiohttp.ClientSession()
             try:
                 response = await session.get(
-                    url = mirakurun_stream_api_url,
+                    url = GetMirakurunAPIEndpointURL(f'/api/services/{mirakurun_service_id}/stream'),
                     headers = {**API_REQUEST_HEADERS, 'X-Mirakurun-Priority': '0'},
                     timeout = aiohttp.ClientTimeout(connect=15, sock_connect=15, sock_read=15)
                 )
@@ -594,7 +660,7 @@ class LiveEncodingTask:
             stream_reader = response.content
 
         # EDCB バックエンド
-        elif CONFIG.general.backend == 'EDCB':
+        elif BACKEND_TYPE == 'EDCB':
 
             # チューナーインスタンスを初期化
             ## Idling への切り替え、ONAir への復帰時に LiveStream 側でチューナーのアンロック/ロックが行われる
@@ -610,7 +676,7 @@ class LiveEncodingTask:
             # ほとんどがチューナー不足によるものなので、ステータス詳細でもそのように表示する
             # 成功時は tuner.close() するか予約などに割り込まれるまで起動しつづけるので注意
             if is_tuner_opened is False:
-                self.live_stream.setStatus('Offline', 'チューナーの起動に失敗しました。チューナー不足が原因かもしれません。(E-02E)')
+                self.live_stream.setStatus('Offline', 'チューナーの起動に失敗しました。空きチューナーが不足していると考えられます。(E-02E)')
 
                 # チューナーを閉じる
                 await self.live_stream.tuner.close()
@@ -731,11 +797,11 @@ class LiveEncodingTask:
 
             # EDCB バックエンド: チューナーとのストリーミング接続を閉じる
             ## チャンネル切り替え時に再利用するため、ここではチューナー自体は閉じない
-            if CONFIG.general.backend == 'EDCB' and self.live_stream.tuner is not None:
+            if BACKEND_TYPE == 'EDCB' and self.live_stream.tuner is not None:
                 await self.live_stream.tuner.disconnect()
 
             # Mirakurun バックエンド: Service Stream API とのストリーミング接続を閉じる
-            if CONFIG.general.backend == 'Mirakurun' and response is not None and session is not None:
+            if BACKEND_TYPE == 'Mirakurun' and response is not None and session is not None:
                 await session.close()
                 response.close()
 
@@ -1077,10 +1143,11 @@ class LiveEncodingTask:
                             self.live_stream.setStatus('Offline', 'チューナーからの放送波の受信がタイムアウトしました。チューナー側に何らかの問題があるかもしれません。(E-11)')
 
                 # Mirakurun の Service Stream API からエラーが返された場合
-                if CONFIG.general.backend == 'Mirakurun' and response is not None and response.status != 200:
+                if BACKEND_TYPE == 'Mirakurun' and response is not None and response.status != 200:
                     # Offline にしてエンコードタスクを停止する
-                    if response.status == 503:
-                        self.live_stream.setStatus('Offline', 'チューナーの起動に失敗しました。チューナー不足が原因かもしれません。(E-12M)')
+                    ## mirakc はなぜか 503 ではなく 404 を返すことがある (バグ?)
+                    if response.status == 503 or response.status == 404:
+                        self.live_stream.setStatus('Offline', 'チューナーの起動に失敗しました。空きチューナーが不足しています。(E-12M)')
                     else:
                         self.live_stream.setStatus('Offline', f'チューナーで不明なエラーが発生しました。Mirakurun 側に問題があるかもしれません。(HTTP Error {response.status}) (E-12M)')
                     break
@@ -1124,8 +1191,8 @@ class LiveEncodingTask:
 
                 # チューナーとの接続が切断された場合
                 ## ref: https://stackoverflow.com/a/45251241/17124142
-                if ((CONFIG.general.backend == 'Mirakurun' and response is not None and response.closed is True) or
-                    (CONFIG.general.backend == 'EDCB' and self.live_stream.tuner is not None and self.live_stream.tuner.isDisconnected() is True)):
+                if ((BACKEND_TYPE == 'Mirakurun' and response is not None and response.closed is True) or
+                    (BACKEND_TYPE == 'EDCB' and self.live_stream.tuner is not None and self.live_stream.tuner.isDisconnected() is True)):
 
                     # エンコードタスクを再起動
                     self.live_stream.setStatus('Restart', 'チューナーとの接続が切断されました。エンコードタスクを再起動しています… (ER-05)')
@@ -1212,7 +1279,7 @@ class LiveEncodingTask:
             # チューナーをアンロックする (EDCB バックエンドのみ)
             ## 新しいエンコードタスクが今回立ち上げたチューナーを再利用できるようにする
             ## エンコーダーの再起動が必要なだけでチューナー自体はそのまま使えるし、わざわざ閉じてからもう一度開くのは無駄
-            if CONFIG.general.backend == 'EDCB' and self.live_stream.tuner is not None:
+            if BACKEND_TYPE == 'EDCB' and self.live_stream.tuner is not None:
                 self.live_stream.tuner.unlock()
 
             # 再起動回数が最大再起動回数に達していなければ、再起動する
@@ -1234,7 +1301,7 @@ class LiveEncodingTask:
 
                 # チューナーを終了する (EDCB バックエンドのみ)
                 ## tuner.close() した時点でそのチューナーインスタンスは意味をなさなくなるので、LiveStream インスタンスのプロパティからも削除する
-                if CONFIG.general.backend == 'EDCB' and self.live_stream.tuner is not None:
+                if BACKEND_TYPE == 'EDCB' and self.live_stream.tuner is not None:
                     await self.live_stream.tuner.close()
                     self.live_stream.tuner = None
 
@@ -1242,7 +1309,7 @@ class LiveEncodingTask:
         else:
 
             # EDCB バックエンドのみ
-            if CONFIG.general.backend == 'EDCB' and self.live_stream.tuner is not None:
+            if BACKEND_TYPE == 'EDCB' and self.live_stream.tuner is not None:
 
                 # チャンネル切り替え時にチューナーが再利用されるように、3秒ほど待つ
                 # 3秒間の間にチューナーの制御権限が新しいエンコードタスクに委譲されれば、下記の通り実際にチューナーが閉じられることはない

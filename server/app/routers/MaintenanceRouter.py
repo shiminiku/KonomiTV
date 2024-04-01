@@ -11,7 +11,9 @@ from fastapi import Request
 from fastapi import status
 from fastapi.exceptions import HTTPException
 from fastapi.security import OAuth2PasswordBearer
+from typing import Annotated
 
+from app import logging
 from app.config import Config
 from app.constants import RESTART_REQUIRED_LOCK_PATH
 from app.models.Channel import Channel
@@ -31,7 +33,7 @@ router = APIRouter(
 
 async def GetCurrentAdminUserOrLocal(
     request: Request,
-    token: str | None = Depends(OAuth2PasswordBearer(tokenUrl='users/token', auto_error=False)),
+    token: Annotated[str | None, Depends(OAuth2PasswordBearer(tokenUrl='users/token', auto_error=False))],
 ) -> User | None:
     """
     現在管理者ユーザーでログインしているか、http://127.0.0.77:7010 からのアクセスであるかを確認する
@@ -46,6 +48,7 @@ async def GetCurrentAdminUserOrLocal(
 
     # それ以外である場合、管理者ユーザーでログインしているかを確認する
     if token is None:
+        logging.error('[MaintenanceRouter][GetCurrentAdminUserOrLocal] Not authenticated')
         raise HTTPException(
             status_code = status.HTTP_401_UNAUTHORIZED,
             detail = 'Not authenticated',
@@ -60,11 +63,11 @@ async def GetCurrentAdminUserOrLocal(
     status_code = status.HTTP_204_NO_CONTENT,
 )
 async def UpdateDatabaseAPI(
-    current_user: User = Depends(GetCurrentAdminUser),
+    current_user: Annotated[User, Depends(GetCurrentAdminUser)],
 ):
     """
     データベースに保存されている、チャンネル情報・番組情報・Twitter アカウント情報などの外部 API に依存するデータをすべて更新する。<br>
-    即座に外部 API でのデータ更新を反映させたい場合に利用する。<br>
+    即座に外部 API からのデータ更新を反映させたい場合に利用する。<br>
     JWT エンコードされたアクセストークンがリクエストの Authorization: Bearer に設定されていて、かつ管理者アカウントでないとアクセスできない。
     """
 
@@ -80,7 +83,7 @@ async def UpdateDatabaseAPI(
     status_code = status.HTTP_204_NO_CONTENT,
 )
 def ServerRestartAPI(
-    current_user: User | None = Depends(GetCurrentAdminUserOrLocal),
+    current_user: Annotated[User | None, Depends(GetCurrentAdminUserOrLocal)],
 ):
     """
     KonomiTV サーバーを再起動する。<br>
@@ -122,11 +125,11 @@ def ServerRestartAPI(
     status_code = status.HTTP_204_NO_CONTENT,
 )
 def ServerShutdownAPI(
-    current_user: User | None = Depends(GetCurrentAdminUserOrLocal),
+    current_user: Annotated[User | None, Depends(GetCurrentAdminUserOrLocal)],
 ):
     """
     KonomiTV サーバーを終了する。<br>
-    なお、PM2 環境 / Docker 環境では、サーバー終了後に自動的にプロセスが再起動されるため、事実上 /api/maintenance/restart と等価。<br>
+    なお、PM2 環境 / Docker 環境ではサーバー終了後に自動的にプロセスが再起動されるため、事実上 /api/maintenance/restart と等価。<br>
     JWT エンコードされたアクセストークンがリクエストの Authorization: Bearer に設定されていて、かつ管理者アカウントでないとアクセスできない。
     """
 

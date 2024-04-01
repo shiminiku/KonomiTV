@@ -76,6 +76,11 @@ class PlayerController {
     // 保持しておかないと clearTimeout() でタイマーを止められない
     private player_control_ui_hide_timer_id: number = 0;
 
+    // Screen Wake Lock API の WakeLockSentinel のインスタンス
+    // 確保した起動ロックを解放するために保持しておく必要がある
+    // Screen Wake Lock API がサポートされていない場合やリクエストに失敗した場合は null になる
+    private screen_wake_lock: WakeLockSentinel | null = null;
+
     // RomSound の AudioContext と AudioBuffer のリスト
     private readonly romsounds_context: AudioContext = new AudioContext();
     private readonly romsounds_buffers: AudioBuffer[] = [];
@@ -169,6 +174,12 @@ class PlayerController {
         // ライブ視聴とビデオ視聴で設定キーが異なる
         const is_show_superimpose = this.playback_mode === 'Live' ?
             settings_store.settings.tv_show_superimpose : settings_store.settings.video_show_superimpose;
+
+        // この時点で LocalStorage に dplayer-danmaku-opacity キーが存在しなければ、コメントの透明度の既定値を設定する
+        // DPlayer のデフォルトは 1.0 (全表示) だが映像が見づらくなるため、0.5 に設定する
+        if (localStorage.getItem('dplayer-danmaku-opacity') === null) {
+            localStorage.setItem('dplayer-danmaku-opacity', '0.5');
+        }
 
         // DPlayer を初期化
         this.player = new DPlayer({
@@ -633,6 +644,15 @@ class PlayerController {
             await this.init();
             this.player?.notice('プレイヤーを再起動しました。', undefined, undefined, undefined);
         });
+
+        // Screen Wake Lock API を利用して画面の自動スリープを抑制する
+        // 待つ必要はないので非同期で実行
+        if ('wakeLock' in navigator) {
+            navigator.wakeLock.request('screen').then((wake_lock) => {
+                this.screen_wake_lock = wake_lock;  // 後で解除するために WakeLockSentinel を保持
+                console.log('\u001b[31m[PlayerController] Screen Wake Lock API: Screen Wake Lock acquired.');
+            });
+        }
 
         // 各 PlayerManager を初期化・登録
         // ライブ視聴とビデオ視聴で必要な PlayerManager が異なる
@@ -1332,6 +1352,14 @@ class PlayerController {
         // 同期処理すると時間が掛かるので、並行して実行する
         await Promise.all(this.player_managers.map(async (player_manager) => player_manager.destroy()));
         this.player_managers = [];
+
+        // Screen Wake Lock API で確保した起動ロックを解放
+        // 起動ロックが確保できていない場合は何もしない
+        if (this.screen_wake_lock !== null) {
+            this.screen_wake_lock.release();
+            this.screen_wake_lock = null;
+            console.log('\u001b[31m[PlayerController] Screen Wake Lock API: Screen Wake Lock released.');
+        }
 
         // ローディング中の背景画像を隠す
         player_store.is_background_display = false;

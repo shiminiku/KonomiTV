@@ -277,9 +277,12 @@ class LivePSIArchivedDataDecoder implements ILivePSIArchivedDataDecoder {
                 } else {
                     let head = ProgramUtils.formatString(new TsChar(item.item_description_char).decode());
                     // 項目名が重複する場合はタブ文字を追加して区別する
-                    while (detail_array.some(detail => detail.head === head)) {
-                        head += '\t';
+                    const original_head = head;
+                    let tab_suffix = '';
+                    while (detail_array.some(detail => detail.head === original_head + tab_suffix)) {
+                        tab_suffix += '\t';
                     }
+                    head += tab_suffix;
                     detail_array.push({head: head, raw_text: item.item_char});
                 }
             }
@@ -288,7 +291,7 @@ class LivePSIArchivedDataDecoder implements ILivePSIArchivedDataDecoder {
             // 見出し
             // 意図的に重複防止のためのタブ文字付加が行われる場合があるため、
             // trim() ではなく明示的に半角スペースと改行のみを指定した replace() を使っている
-            let head_hankaku = ProgramUtils.formatString(detail.head).replaceAll('◇', '').replace(/[\s\r\n]+/g, '');  // ◇ を取り除く
+            let head_hankaku = ProgramUtils.formatString(detail.head).replaceAll('◇', '').replace(/[ \r\n]+/g, '');  // ◇ を取り除く
             // 見出しが空の場合、固定で「番組内容」としておく
             if (head_hankaku === '') {
                 head_hankaku = '番組内容';

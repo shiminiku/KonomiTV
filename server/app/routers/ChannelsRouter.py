@@ -17,13 +17,13 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import Response
 from fastapi.security.utils import get_authorization_scheme_param
 from tortoise import connections
-from typing import Any
+from typing import Annotated, Any
 from zoneinfo import ZoneInfo
 
 from app import logging
 from app import schemas
 from app.config import Config
-from app.constants import API_REQUEST_HEADERS, LOGO_DIR, VERSION
+from app.constants import HTTPX_CLIENT, LOGO_DIR, VERSION
 from app.models.Channel import Channel
 from app.routers.UsersRouter import GetCurrentUser
 from app.streams.LiveStream import LiveStream
@@ -40,9 +40,11 @@ router = APIRouter(
 )
 
 
-async def GetChannel(channel_id: str = Path(..., description='チャンネル ID (id or display_channel_id) 。ex: NID32736-SID1024, gr011')) -> Channel:
+async def GetChannel(channel_id: Annotated[str, Path(description='チャンネル ID (id or display_channel_id) 。ex: NID32736-SID1024, gr011')]) -> Channel:
     """ チャンネル ID (id or display_channel_id) からチャンネル情報を取得する """
-    # display_channel_id ではなく通常の id が指定されている場合は、そのまま id からチャンネル情報を取得する
+
+    # チャンネル ID が存在するか確認
+    ## display_channel_id ではなく通常の id が指定されている場合は、そのまま id からチャンネル情報を取得する
     if 'NID' in channel_id and 'SID' in channel_id:
         channel = await Channel.filter(id=channel_id).get_or_none()
     else:
@@ -53,6 +55,7 @@ async def GetChannel(channel_id: str = Path(..., description='チャンネル ID
             status_code = status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail = 'Specified display_channel_id was not found',
         )
+
     return channel
 
 
@@ -256,7 +259,7 @@ async def ChannelsAPI():
     response_model = schemas.LiveChannel,
 )
 async def ChannelAPI(
-    channel: Channel = Depends(GetChannel),
+    channel: Annotated[Channel, Depends(GetChannel)],
 ):
     """
     指定されたチャンネルの情報を取得する。
@@ -282,7 +285,7 @@ async def ChannelAPI(
 )
 async def ChannelLogoAPI(
     request: Request,
-    channel_id: str = Path(..., description='チャンネル ID (id or display_channel_id) 。ex: NID32736-SID1024, gr011')
+    channel_id: Annotated[str, Path(description='チャンネル ID (id or display_channel_id) 。ex: NID32736-SID1024, gr011')],
 ):
     """
     指定されたチャンネルに紐づくロゴを取得する。
@@ -434,12 +437,8 @@ async def ChannelLogoAPI(
             # 同梱のロゴが存在しない場合のみ
             try:
                 mirakurun_logo_api_url = GetMirakurunAPIEndpointURL(f'/api/services/{mirakurun_service_id}/logo')
-                async with httpx.AsyncClient() as client:
-                    mirakurun_logo_api_response = await client.get(
-                        url = mirakurun_logo_api_url,
-                        headers = API_REQUEST_HEADERS,
-                        timeout = 5,
-                    )
+                async with HTTPX_CLIENT() as client:
+                    mirakurun_logo_api_response = await client.get(mirakurun_logo_api_url, timeout=5)
 
                 # ステータスコードが 200 であれば
                 # ステータスコードが 503 の場合はロゴデータが存在しない
@@ -529,7 +528,7 @@ async def ChannelLogoAPI(
 )
 async def ChannelJikkyoSessionAPI(
     request: Request,
-    channel: Channel = Depends(GetChannel),
+    channel: Annotated[Channel, Depends(GetChannel)],
 ):
     """
     指定されたチャンネルに紐づくニコニコ実況のセッション情報を取得する。

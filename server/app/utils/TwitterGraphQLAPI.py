@@ -57,11 +57,13 @@ class TwitterGraphQLAPI:
         self.twitter_account = twitter_account
 
         # Chrome への偽装用 HTTP リクエストヘッダーと Cookie を取得
+        ## User-Agent ヘッダーも Chrome に偽装されている
         cookie_session_user_handler = self.twitter_account.getTweepyAuthHandler()
         headers_dict = cookie_session_user_handler.get_graphql_api_headers()
         cookies_dict = cookie_session_user_handler.get_cookies_as_dict()
 
         # httpx の非同期 HTTP クライアントのインスタンスを作成
+        ## 可能な限り Chrome からのリクエストに偽装するため、app.constants.HTTPX_CLIENT は使わずに独自のインスタンスを作成する
         self.httpx_client = httpx.AsyncClient(
             ## リクエストヘッダーと Cookie を設定
             headers = headers_dict,
@@ -215,7 +217,7 @@ class TwitterGraphQLAPI:
         # Twitter GraphQL API にリクエスト
         response = await self.invokeGraphQLAPI(
             method = 'POST',
-            query_id = 'XQXK9Ei5fXUPxCF4zRmBLA',
+            query_id = '_BCvBRcat20zPDIAxmH5ag',
             endpoint = 'CreateTweet',
             variables = {
                 'tweet_text': tweet,
@@ -593,7 +595,7 @@ class TwitterGraphQLAPI:
         # Twitter GraphQL API にリクエスト
         response = await self.invokeGraphQLAPI(
             method = 'POST',
-            query_id = 'J1AQiEIiEDyF-1zgyrXHCA',
+            query_id = 'B8Vl9DEr2lCmRtlTA-yZjA',
             endpoint = 'HomeLatestTimeline',
             variables = variables,
             features = {
@@ -683,7 +685,7 @@ class TwitterGraphQLAPI:
         # Twitter GraphQL API にリクエスト
         response = await self.invokeGraphQLAPI(
             method = 'GET',
-            query_id = 'Lb34NbSpm24cOO75mjdvnQ',
+            query_id = 'ummoVKaeoT01eUyXutiSVQ',
             endpoint = 'SearchTimeline',
             variables = variables,
             features = {
@@ -739,4 +741,4 @@ class TwitterGraphQLAPI:
             next_cursor_id = next_cursor_id,
             previous_cursor_id = previous_cursor_id,
             tweets = tweets,
-        )
+        )#

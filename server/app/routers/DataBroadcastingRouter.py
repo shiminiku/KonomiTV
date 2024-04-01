@@ -16,6 +16,7 @@ from typing import Annotated
 
 from app import logging
 from app import schemas
+from app.constants import API_REQUEST_HEADERS
 
 
 # ルーター
@@ -45,6 +46,7 @@ async def BMLBrowserRequestGETProxyAPI(
 
     # URLが HTTP または HTTPS URL かのバリデーション
     if not (request_url.startswith("http://") or request_url.startswith("https://")):
+        logging.error(f'[DataBroadcastingRouter][BMLBrowserRequestGETProxyAPI] Request URL must be http or https URL: {request_url}')
         raise HTTPException(
             status_code = status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail = 'Request URL must be http or https URL',
@@ -62,9 +64,11 @@ async def BMLBrowserRequestGETProxyAPI(
         if key.lower() in allowed_request_headers:
             headers[key] = value
 
-    # データ放送からアクセスされるサイトは HTTPS の場合でも証明書が切れていることが日常茶飯事なので、証明書の検証を行わない
-    async with httpx.AsyncClient(follow_redirects=True, verify=False) as client:
-        response = await client.get(request_url, headers=headers)
+    # タイムアウトはデータ放送の動作を壊さないようにあえて設定しない
+    # さらにデータ放送からアクセスされるサイトは HTTPS の場合でも証明書が切れていることが日常茶飯事なので、証明書の検証を行わない
+    ## 正確には放送波経由で古い規格の HTTPS 証明書が降ってきているらしいが、どのみち実装困難なので証明書の状態は無視する
+    async with httpx.AsyncClient(headers={**API_REQUEST_HEADERS, **headers}, follow_redirects=True, verify=False) as client:
+        response = await client.get(request_url)
 
     allowed_response_headers = [
         'accept-ranges',
@@ -91,7 +95,7 @@ async def BMLBrowserRequestGETProxyAPI(
 )
 async def BMLBrowserRequestPOSTProxyAPI(
     request_url: Annotated[str, Path(description='リクエスト URL 。')],
-    Denbun: Annotated[str, Form(description='データ放送ブラウザからのリクエストボディ (Denbun) 。', max_length=4096)],
+    Denbun: Annotated[str, Form(max_length=4096, description='データ放送ブラウザからのリクエストボディ (Denbun) 。')] = '',
 ):
     """
     データ放送ブラウザ (web-bml) のネット接続機能から利用される、HTTP (POST) プロキシ。<br>
@@ -102,6 +106,7 @@ async def BMLBrowserRequestPOSTProxyAPI(
 
     # URLが HTTP または HTTPS URL かのバリデーション
     if not (request_url.startswith("http://") or request_url.startswith("https://")):
+        logging.error(f'[DataBroadcastingRouter][BMLBrowserRequestPOSTProxyAPI] Request URL must be http or https URL: {request_url}')
         raise HTTPException(
             status_code = status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail = 'Request URL must be http or https URL',
@@ -116,9 +121,11 @@ async def BMLBrowserRequestPOSTProxyAPI(
         'Content-Type': 'application/x-www-form-urlencoded',
     }
 
-    # データ放送からアクセスされるサイトは HTTPS の場合でも証明書が切れていることが日常茶飯事なので、証明書の検証を行わない
-    async with httpx.AsyncClient(follow_redirects=True, verify=False) as client:
-        response = await client.post(request_url, headers=headers, content=f'Denbun={Denbun}')
+    # タイムアウトはデータ放送の動作を壊さないようにあえて設定しない
+    # さらにデータ放送からアクセスされるサイトは HTTPS の場合でも証明書が切れていることが日常茶飯事なので、証明書の検証を行わない
+    ## 正確には放送波経由で古い規格の HTTPS 証明書が降ってきているらしいが、どのみち実装困難なので証明書の状態は無視する
+    async with httpx.AsyncClient(headers={**API_REQUEST_HEADERS, **headers}, follow_redirects=True, verify=False) as client:
+        response = await client.post(request_url, content=f'Denbun={Denbun}')
 
     allowed_response_headers = [
         'accept-ranges',

@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from enum import IntEnum
 from io import BufferedReader
 from pydantic_core import Url
-from typing import Callable, cast, ClassVar, Literal, TypedDict, TypeVar
+from typing import Callable, cast, ClassVar, Literal, NotRequired, TypedDict, TypeVar
 from zoneinfo import ZoneInfo
 
 from app.config import Config
@@ -365,6 +365,7 @@ class ChSet5Item(TypedDict):
     partial_flag: bool
     epg_cap_flag: bool
     search_flag: bool
+    remocon_id: int
 
 
 class EDCBUtil:
@@ -404,6 +405,33 @@ class EDCBUtil:
         return edcb_url.port
 
     @staticmethod
+    async def getEDCBStatus(edcb_url: Url | None = None) -> Literal['Normal', 'Recording', 'EPGGathering', 'Unknown']:
+        """
+        現在の EDCB (EpgTimerSrv) の動作ステータスを取得する
+        Unknown が返る場合はおそらく EpgTimerSrv が起動していない
+
+        Returns:
+            Literal['Normal', 'Recording', 'EPGGathering', 'Unknown']: EDCB (EpgTimerSrv) の動作ステータス
+        """
+
+        # 現在の EpgTimerSrv の動作ステータスを取得できるか試してみる
+        edcb = CtrlCmdUtil(edcb_url)
+        edcb.setConnectTimeOutSec(5)  # 5秒後にタイムアウト
+        result = await edcb.sendGetNotifySrvStatus()
+        if result is None:
+            return 'Unknown'
+
+        # result['param1'] に EpgTimerSrv の動作ステータスが入っている (0: 通常 / 1: 録画中 / 2: EPG 取得中)
+        if result['param1'] == 0:
+            return 'Normal'
+        elif result['param1'] == 1:
+            return 'Recording'
+        elif result['param1'] == 2:
+            return 'EPGGathering'
+
+        return 'Unknown'
+
+    @staticmethod
     def convertBytesToString(buffer: bytes) -> str:
         """ BOM に基づいて Bytes データを文字列に変換する """
         if len(buffer) == 0:
@@ -432,7 +460,11 @@ class EDCBUtil:
                         'service_type': int(field[5]),
                         'partial_flag': int(field[6]) != 0,
                         'epg_cap_flag': int(field[7]) != 0,
-                        'search_flag': int(field[8]) != 0
+                        'search_flag': int(field[8]) != 0,
+                        # リモコン ID は EDCB-240213 以降にのみ存在する
+                        ## ref: https://github.com/xtne6f/EDCB/commit/aefe0eec87e495f92165ae67b50115353fb28599
+                        ## ref: https://github.com/xtne6f/EDCB/commit/f19dd4031bff9cc41134d5e3dc6fd8b17373020c
+                        'remocon_id': int(field[9]) if len(field) >= 10 else 0,
                     })
                 except Exception:
                     pass
@@ -585,6 +617,12 @@ class RecFileSetInfo(TypedDict, total=False):
     write_plug_in: str
     rec_name_plug_in: str
 
+class RecFileSetInfoRequired(TypedDict):
+    """ 録画フォルダ情報 (すべてのキーが必須) """
+    rec_folder: str
+    write_plug_in: str
+    rec_name_plug_in: str
+
 
 class RecSettingData(TypedDict, total=False):
     """ 録画設定 """
@@ -597,12 +635,30 @@ class RecSettingData(TypedDict, total=False):
     rec_folder_list: list[RecFileSetInfo]
     suspend_mode: int
     reboot_flag: bool
-    start_margin: int  # デフォルトのとき存在しない
-    end_margin: int  # デフォルトのとき存在しない
+    start_margin: NotRequired[int]  # デフォルトのとき存在しない
+    end_margin: NotRequired[int]  # デフォルトのとき存在しない
     continue_rec_flag: bool
     partial_rec_flag: int
     tuner_id: int
     partial_rec_folder: list[RecFileSetInfo]
+
+class RecSettingDataRequired(TypedDict):
+    """ 録画設定 (基本すべてのキーが必須) """
+    rec_mode: int  # 0-4: 全サービス～視聴, 5-8: 無効の指定サービス～視聴, 9: 無効の全サービス
+    priority: int
+    tuijyuu_flag: bool
+    service_mode: int
+    pittari_flag: bool
+    bat_file_path: str
+    rec_folder_list: list[RecFileSetInfoRequired]
+    suspend_mode: int
+    reboot_flag: bool
+    start_margin: NotRequired[int]  # デフォルトのとき存在しない
+    end_margin: NotRequired[int]  # デフォルトのとき存在しない
+    continue_rec_flag: bool
+    partial_rec_flag: int
+    tuner_id: int
+    partial_rec_folder: list[RecFileSetInfoRequired]
 
 
 class ReserveData(TypedDict, total=False):
@@ -620,6 +676,23 @@ class ReserveData(TypedDict, total=False):
     overlap_mode: int
     start_time_epg: datetime.datetime
     rec_setting: RecSettingData
+    rec_file_name_list: list[str]  # 録画予定ファイル名
+
+class ReserveDataRequired(TypedDict):
+    """ 予約情報 (すべてのキーが必須) """
+    title: str
+    start_time: datetime.datetime
+    duration_second: int
+    station_name: str
+    onid: int
+    tsid: int
+    sid: int
+    eid: int
+    comment: str
+    reserve_id: int
+    overlap_mode: int
+    start_time_epg: datetime.datetime
+    rec_setting: RecSettingDataRequired
     rec_file_name_list: list[str]  # 録画予定ファイル名
 
 
@@ -752,6 +825,15 @@ class SearchDateInfo(TypedDict, total=False):
     end_hour: int
     end_min: int
 
+class SearchDateInfoRequired(TypedDict):
+    """ 対象期間 (すべてのキーが必須) """
+    start_day_of_week: int
+    start_hour: int
+    start_min: int
+    end_day_of_week: int
+    end_hour: int
+    end_min: int
+
 
 class SearchKeyInfo(TypedDict, total=False):
     """ 検索条件 """
@@ -776,12 +858,42 @@ class SearchKeyInfo(TypedDict, total=False):
     chk_duration_min: int
     chk_duration_max: int
 
+class SearchKeyInfoRequired(TypedDict):
+    """ 検索条件 (すべてのキーが必須) """
+    and_key: str  # 登録無効、大小文字区別、番組長についての接頭辞は処理済み
+    not_key: str
+    key_disabled: bool
+    case_sensitive: bool
+    reg_exp_flag: bool
+    title_only_flag: bool
+    content_list: list[ContentData]
+    date_list: list[SearchDateInfoRequired]
+    service_list: list[int]  # (onid << 32 | tsid << 16 | sid) のリスト
+    video_list: list[int]  # 無視してよい
+    audio_list: list[int]  # 無視してよい
+    aimai_flag: bool
+    not_contet_flag: bool
+    not_date_flag: bool
+    free_ca_flag: int
+    chk_rec_end: bool
+    chk_rec_day: int
+    chk_rec_no_service: bool
+    chk_duration_min: int
+    chk_duration_max: int
+
 
 class AutoAddData(TypedDict, total=False):
     """ 自動予約登録情報 """
     data_id: int
     search_info: SearchKeyInfo
     rec_setting: RecSettingData
+    add_count: int
+
+class AutoAddDataRequired(TypedDict):
+    """ 自動予約登録情報 (すべてのキーが必須) """
+    data_id: int
+    search_info: SearchKeyInfoRequired
+    rec_setting: RecSettingDataRequired
     add_count: int
 
 
@@ -1005,7 +1117,7 @@ class CtrlCmdUtil:
                                       lambda buf: self.__writeInt(buf, nwtv_id))
         return ret == self.__CMD_SUCCESS
 
-    async def sendEnumReserve(self) -> list[ReserveData] | None:
+    async def sendEnumReserve(self) -> list[ReserveDataRequired] | None:
         """ 予約一覧を取得する """
         ret, rbuf = await self.__sendCmd2(self.__CMD_EPG_SRV_ENUM_RESERVE2)
         if ret == self.__CMD_SUCCESS:
@@ -1013,7 +1125,7 @@ class CtrlCmdUtil:
             pos = [0]
             try:
                 if self.__readUshort(bufview, pos, len(rbuf)) >= self.__CMD_VER:
-                    return self.__readVector(self.__readReserveData, bufview, pos, len(rbuf))
+                    return cast(list[ReserveDataRequired], self.__readVector(self.__readReserveData, bufview, pos, len(rbuf)))
             except self.__ReadError:
                 pass
         return None
@@ -1145,7 +1257,7 @@ class CtrlCmdUtil:
                 pass
         return None
 
-    async def sendEnumAutoAdd(self) -> list[AutoAddData] | None:
+    async def sendEnumAutoAdd(self) -> list[AutoAddDataRequired] | None:
         """ 自動予約登録情報一覧を取得する """
         ret, rbuf = await self.__sendCmd2(self.__CMD_EPG_SRV_ENUM_AUTO_ADD2)
         if ret == self.__CMD_SUCCESS:
@@ -1153,7 +1265,7 @@ class CtrlCmdUtil:
             pos = [0]
             try:
                 if self.__readUshort(bufview, pos, len(rbuf)) >= self.__CMD_VER:
-                    return self.__readVector(self.__readAutoAddData, bufview, pos, len(rbuf))
+                    return cast(list[AutoAddDataRequired], self.__readVector(self.__readAutoAddData, bufview, pos, len(rbuf)))
             except self.__ReadError:
                 pass
         return None

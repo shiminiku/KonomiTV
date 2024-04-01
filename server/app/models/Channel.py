@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 from app import logging
 from app.config import Config
-from app.constants import API_REQUEST_HEADERS, DATABASE_CONFIG
+from app.constants import DATABASE_CONFIG, HTTPX_CLIENT
 from app.utils import GetMirakurunAPIEndpointURL
 from app.utils.EDCB import CtrlCmdUtil
 from app.utils.EDCB import EDCBUtil
@@ -111,24 +111,20 @@ class Channel(models.Model):
             # この変数から更新対象のチャンネル情報を削除していき、残った古いチャンネル情報を最後にまとめて削除する
             duplicate_channels = {temp.id:temp for temp in await Channel.filter(is_watchable=True)}
 
-            # Mirakurun の API からチャンネル情報を取得する
+            # Mirakurun / mirakc の API からチャンネル情報を取得する
             try:
                 mirakurun_services_api_url = GetMirakurunAPIEndpointURL('/api/services')
-                async with httpx.AsyncClient() as client:
-                    mirakurun_services_api_response = await client.get(
-                        url = mirakurun_services_api_url,
-                        headers = API_REQUEST_HEADERS,
-                        timeout = 5,
-                    )
-                if mirakurun_services_api_response.status_code != 200:  # Mirakurun からエラーが返ってきた
-                    logging.error(f'Failed to get channels from Mirakurun. (HTTP Error {mirakurun_services_api_response.status_code})')
-                    raise Exception(f'Failed to get channels from Mirakurun. (HTTP Error {mirakurun_services_api_response.status_code})')
+                async with HTTPX_CLIENT() as client:
+                    mirakurun_services_api_response = await client.get(mirakurun_services_api_url, timeout=5)
+                if mirakurun_services_api_response.status_code != 200:  # Mirakurun / mirakc からエラーが返ってきた
+                    logging.error(f'Failed to get channels from Mirakurun / mirakc. (HTTP Error {mirakurun_services_api_response.status_code})')
+                    raise Exception(f'Failed to get channels from Mirakurun / mirakc. (HTTP Error {mirakurun_services_api_response.status_code})')
                 services = mirakurun_services_api_response.json()
             except httpx.NetworkError as ex:
-                logging.error(f'Failed to get channels from Mirakurun. (Network Error)')
+                logging.error(f'Failed to get channels from Mirakurun / mirakc. (Network Error)')
                 raise ex
             except httpx.TimeoutException as ex:
-                logging.error(f'Failed to get channels from Mirakurun. (Connection Timeout)')
+                logging.error(f'Failed to get channels from Mirakurun / mirakc. (Connection Timeout)')
                 raise ex
 
             # 同じネットワーク ID のサービスのカウント
@@ -250,9 +246,9 @@ class Channel(models.Model):
             edcb.setConnectTimeOutSec(5)  # 5秒後にタイムアウト
 
             # EDCB の ChSet5.txt からチャンネル情報を取得する
-            services = await edcb.sendFileCopy('ChSet5.txt')
-            if services is not None:
-                services = EDCBUtil.parseChSet5(EDCBUtil.convertBytesToString(services))
+            chset5_txt = await edcb.sendFileCopy('ChSet5.txt')
+            if chset5_txt is not None:
+                services = EDCBUtil.parseChSet5(EDCBUtil.convertBytesToString(chset5_txt))
                 # 枝番処理がミスらないようソートしておく
                 services.sort(key = lambda temp: temp['onid'] * 100000 + temp['sid'])
             else:
@@ -285,6 +281,16 @@ class Channel(models.Model):
                 if channel_type == 'OTHER':
                     continue
 
+                # EPG 取得対象でないチャンネルを弾く
+                ## EDCB のデフォルトの EPG 取得対象チャンネルはデジタルTVサービス・デジタル音声サービスのみ
+                ## EDCB で EPG 取得対象でないチャンネルは番組情報が取得できないし、当然予約録画もできず登録しておく意味がない
+                ## (BS では極々稀に野球中継の延長時などに臨時サービスが運用されうるが、年に数度あるかないか程度なので当面考慮しない)
+                ## この処理により、EDCB 上で有効とされているチャンネル数と KonomiTV 上のチャンネル数が概ね一致するようになる
+                ## (上記処理で除外しているワンセグなどのチャンネルが EPG 取得対象になっている場合は一致しないが、基本ないと思うので考慮しない)
+                ## これにより、番組検索時のサービス絞り込みリストに EPG 取得対象でないチャンネルが紛れ込むのを回避できる
+                if service['epg_cap_flag'] == False:
+                    continue
+
                 # チャンネル ID
                 channel_id = f'NID{service["onid"]}-SID{service["sid"]:03d}'
 
@@ -309,7 +315,7 @@ class Channel(models.Model):
                 channel.service_id = int(service['sid'])
                 channel.network_id = int(service['onid'])
                 channel.transport_stream_id = int(service['tsid'])
-                channel.remocon_id = 0  # リモコン番号を取得できなかった際は 0 がそのまま設定される
+                channel.remocon_id = int(service['remocon_id'])  # EDCB-240213 未満の EDCB では ChSet5.txt からリモコン番号を取得できず、常に 0 になる
                 channel.type = channel_type
                 channel.name = TSInformation.formatString(service['service_name'])
                 channel.jikkyo_force = None
@@ -343,9 +349,9 @@ class Channel(models.Model):
                 ## 地デジ: EDCB からリモコン番号を取得
                 if channel.type == 'GR':
 
-                    # EPG 由来のチャンネル情報を取得
-                    ## 現在のチャンネルのリモコン番号が含まれる
-                    ## EDCB では EPG 由来のチャンネル情報からしかリモコン番号の情報を取得できない
+                    # EPG 由来のチャンネル情報から現在のチャンネルのリモコン番号を取得
+                    ## EDCB-240213 以降であれば ChSet5.txt にリモコン番号が含まれているが、それ以前のバージョンでは
+                    ## EPG 由来のチャンネル情報以外からはリモコン番号を取得できないことによる対応
                     epg_service = next(filter(lambda temp: temp['onid'] == channel.network_id and temp['sid'] == channel.service_id, epg_services), None)
 
                     if epg_service is not None:
@@ -353,7 +359,8 @@ class Channel(models.Model):
                         channel.remocon_id = int(epg_service['remote_control_key_id'])
                     else:
                         # 取得できなかったので、あれば以前のバックアップからリモコン番号を取得
-                        channel.remocon_id = backup_remocon_ids.get(channel.id, 0)
+                        if channel.remocon_id <= 0 and channel.id in backup_remocon_ids:
+                            channel.remocon_id = backup_remocon_ids.get(channel.id, 0)
 
                         # それでもリモコン番号が不明の時は、同じネットワーク ID を持つ別サービスのリモコン番号を取得する
                         ## 地上波の臨時サービスはリモコン番号が取得できないことが多い問題への対応

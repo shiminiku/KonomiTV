@@ -14,7 +14,6 @@ from pydantic import (
     BaseModel,
     confloat,
     DirectoryPath,
-    Field,
     field_validator,
     FilePath,
     PositiveInt,
@@ -40,12 +39,12 @@ from app.constants import (
 class ClientSettings(BaseModel):
     # showed_panel_last_time: 同期無効
     # selected_twitter_account_id: 同期無効
-    saved_twitter_hashtags: list[str] = Field([])
-    pinned_channel_ids: list[str] = Field([])
-    panel_display_state: Literal['RestorePreviousState', 'AlwaysDisplay', 'AlwaysFold'] = Field('RestorePreviousState')
-    tv_panel_active_tab: Literal['Program', 'Channel', 'Comment', 'Twitter'] = Field('Program')
-    video_panel_active_tab: Literal['RecordedProgram', 'Series', 'Comment', 'Twitter'] = Field('RecordedProgram')
-    tv_channel_selection_requires_alt_key: bool = Field(False)
+    saved_twitter_hashtags: list[str] = []
+    pinned_channel_ids: list[str] = []
+    panel_display_state: Literal['RestorePreviousState', 'AlwaysDisplay', 'AlwaysFold'] = 'RestorePreviousState'
+    tv_panel_active_tab: Literal['Program', 'Channel', 'Comment', 'Twitter'] = 'Program'
+    video_panel_active_tab: Literal['RecordedProgram', 'Series', 'Comment', 'Twitter'] = 'RecordedProgram'
+    tv_channel_selection_requires_alt_key: bool = False
     # tv_streaming_quality: 同期無効
     # tv_streaming_quality_cellular: 同期無効
     # tv_data_saver_mode: 同期無効
@@ -56,48 +55,49 @@ class ClientSettings(BaseModel):
     # video_streaming_quality_cellular: 同期無効
     # video_data_saver_mode: 同期無効
     # video_data_saver_mode_cellular: 同期無効
-    caption_font: str = Field('Windows TV MaruGothic')
-    always_border_caption_text: bool = Field(True)
-    specify_caption_opacity: bool = Field(False)
-    caption_opacity: float = Field(1.0)
-    tv_show_superimpose: bool = Field(True)
-    video_show_superimpose: bool = Field(False)
+    caption_font: str = 'Windows TV MaruGothic'
+    always_border_caption_text: bool = True
+    specify_caption_opacity: bool = False
+    caption_opacity: float = 1.0
+    tv_show_superimpose: bool = True
+    video_show_superimpose: bool = False
     # tv_show_data_broadcasting: 同期無効
     # enable_internet_access_from_data_broadcasting: 同期無効
-    capture_save_mode: Literal['Browser', 'UploadServer', 'Both'] = Field('UploadServer')
-    capture_caption_mode: Literal['VideoOnly', 'CompositingCaption', 'Both'] = Field('Both')
+    capture_save_mode: Literal['Browser', 'UploadServer', 'Both'] = 'UploadServer'
+    capture_caption_mode: Literal['VideoOnly', 'CompositingCaption', 'Both'] = 'Both'
     # capture_copy_to_clipboard: 同期無効
     # sync_settings: 同期無効
-    comment_speed_rate: float = Field(1)
-    comment_font_size: int = Field(34)
-    close_comment_form_after_sending: bool = Field(True)
-    mute_vulgar_comments: bool = Field(True)
-    mute_abusive_discriminatory_prejudiced_comments: bool = Field(True)
-    mute_big_size_comments: bool = Field(True)
-    mute_fixed_comments: bool = Field(False)
-    mute_colored_comments: bool = Field(False)
-    mute_consecutive_same_characters_comments: bool = Field(False)
-    muted_comment_keywords: list[dict[str, str]] = Field([])
-    muted_niconico_user_ids: list[str] = Field([])
-    fold_panel_after_sending_tweet: bool = Field(False)
-    reset_hashtag_when_program_switches: bool = Field(True)
-    auto_add_watching_channel_hashtag: bool = Field(True)
-    twitter_active_tab: Literal['Search', 'Timeline', 'Capture'] = Field('Capture')
-    tweet_hashtag_position: Literal['Prepend', 'Append', 'PrependWithLineBreak', 'AppendWithLineBreak'] = Field('Append')
-    tweet_capture_watermark_position: Literal['None', 'TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'] = Field('None')
+    comment_speed_rate: float = 1.0
+    comment_font_size: int = 34
+    close_comment_form_after_sending: bool = True
+    mute_vulgar_comments: bool = True
+    mute_abusive_discriminatory_prejudiced_comments: bool = True
+    mute_big_size_comments: bool = True
+    mute_fixed_comments: bool = False
+    mute_colored_comments: bool = False
+    mute_consecutive_same_characters_comments: bool = False
+    muted_comment_keywords: list[dict[str, str]] = []
+    muted_niconico_user_ids: list[str] = []
+    fold_panel_after_sending_tweet: bool = False
+    reset_hashtag_when_program_switches: bool = True
+    auto_add_watching_channel_hashtag: bool = True
+    twitter_active_tab: Literal['Search', 'Timeline', 'Capture'] = 'Capture'
+    tweet_hashtag_position: Literal['Prepend', 'Append', 'PrependWithLineBreak', 'AppendWithLineBreak'] = 'Append'
+    tweet_capture_watermark_position: Literal['None', 'TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'] = 'None'
 
 
 # サーバー設定を表す Pydantic モデル
 # config.yaml のバリデーションは設定データをこの Pydantic モデルに通すことで行う
 
 class _ServerSettingsGeneral(BaseModel):
-    backend: Literal['EDCB', 'Mirakurun']
-    edcb_url: Annotated[Url, UrlConstraints(allowed_schemes=['tcp'])]
-    mirakurun_url: AnyHttpUrl
-    encoder: Literal['FFmpeg', 'QSVEncC', 'NVEncC', 'VCEEncC', 'rkmppenc']
-    program_update_interval: Annotated[float, confloat(ge=0.1)]
-    debug: bool
-    debug_encoder: bool
+    backend: Literal['EDCB', 'Mirakurun'] = 'EDCB'
+    always_receive_tv_from_mirakurun: bool = False
+    edcb_url: Annotated[Url, UrlConstraints(allowed_schemes=['tcp'])] = Url('tcp://127.0.0.1:4510/')
+    mirakurun_url: AnyHttpUrl = AnyHttpUrl('http://127.0.0.1:40772/')
+    encoder: Literal['FFmpeg', 'QSVEncC', 'NVEncC', 'VCEEncC', 'rkmppenc'] = 'FFmpeg'
+    program_update_interval: Annotated[float, confloat(ge=0.1)] = 5.0
+    debug: bool = False
+    debug_encoder: bool = False
 
     @field_validator('edcb_url')
     def validate_edcb_url(cls, edcb_url: Url, info: ValidationInfo) -> Url:
@@ -109,7 +109,6 @@ class _ServerSettingsGeneral(BaseModel):
         # EDCB バックエンドの接続確認
         if info.data.get('backend') == 'EDCB':
             # 循環参照を避けるために遅延インポート
-            from app.utils.EDCB import CtrlCmdUtil
             from app.utils.EDCB import EDCBUtil
             # edcb_url を明示的に指定
             ## edcb_url を省略すると内部で再帰的に LoadConfig() が呼ばれてしまい RecursionError が発生する
@@ -122,26 +121,17 @@ class _ServerSettingsGeneral(BaseModel):
                     'EDCB の URL を間違えている可能性があります。'
                 )
             # 現在の EpgTimerSrv の動作ステータスを取得できるか試してみる
-            ## result['param1'] に EpgTimerSrv の動作ステータスが入っている (0: 通常 / 1: 録画中 / 2: EPG 取得中)
             ## RecursionError 回避のために edcb_url を明示的に指定
             ## ThreadPoolExecutor 上で実行し、自動リロードモード時に発生するイベントループ周りの謎エラーを回避する
-            edcb = CtrlCmdUtil(edcb_url)
-            edcb.setConnectTimeOutSec(5)  # 5秒後にタイムアウト
             with concurrent.futures.ThreadPoolExecutor(1) as executor:
-                result = executor.submit(asyncio.run, edcb.sendGetNotifySrvStatus()).result()
-            if result is None:
+                result = executor.submit(asyncio.run, EDCBUtil.getEDCBStatus(edcb_url)).result()
+            if result == 'Unknown':
                 raise ValueError(
                     f'EDCB ({edcb_url}) にアクセスできませんでした。\n'
                     'EDCB が起動していないか、URL を間違えている可能性があります。'
                 )
             from app import logging
-            logging.info(f'Backend: EDCB ({edcb_url})')
-            if result['param1'] == 0:
-                logging.info('EpgTimerSrv Status: Normal')
-            elif result['param1'] == 1:
-                logging.info('EpgTimerSrv Status: Recording')
-            elif result['param1'] == 2:
-                logging.info('EpgTimerSrv Status: Gathering EPG')
+            logging.info(f'Backend: EDCB ({edcb_url}) Status: {result}')
         return edcb_url
 
     @field_validator('mirakurun_url')
@@ -154,7 +144,7 @@ class _ServerSettingsGeneral(BaseModel):
         if type(info.context) is dict and info.context.get('bypass_validation') is True:
             return mirakurun_url
         # Mirakurun バックエンドの接続確認
-        if info.data.get('backend') == 'Mirakurun':
+        if info.data.get('backend') == 'Mirakurun' or info.data.get('always_receive_tv_from_mirakurun') is True:
             # 試しにリクエストを送り、200 (OK) が返ってきたときだけ有効な URL とみなす
             try:
                 response = httpx.get(
@@ -180,6 +170,8 @@ class _ServerSettingsGeneral(BaseModel):
                 )
             from app import logging
             logging.info(f'Backend: Mirakurun {response_json.get("current")} ({mirakurun_url})')
+            if info.data.get('always_receive_tv_from_mirakurun') is True:
+                logging.info(f'Always receive TV from Mirakurun.')
         return mirakurun_url
 
     @field_validator('encoder')
@@ -235,9 +227,9 @@ class _ServerSettingsGeneral(BaseModel):
         return encoder
 
 class _ServerSettingsServer(BaseModel):
-    port: PositiveInt
-    custom_https_certificate: FilePath | None
-    custom_https_private_key: FilePath | None
+    port: PositiveInt = 7000
+    custom_https_certificate: FilePath | None = None
+    custom_https_private_key: FilePath | None = None
 
     @field_validator('port')
     def validate_port(cls, port: int, info: ValidationInfo) -> int:
@@ -289,21 +281,21 @@ class _ServerSettingsServer(BaseModel):
         return port
 
 class _ServerSettingsTV(BaseModel):
-    max_alive_time: PositiveInt
-    debug_mode_ts_path: FilePath | None
+    max_alive_time: PositiveInt = 10
+    debug_mode_ts_path: FilePath | None = None
 
 class _ServerSettingsVideo(BaseModel):
-    recorded_folders: list[DirectoryPath]
+    recorded_folders: list[DirectoryPath] = []
 
 class _ServerSettingsCapture(BaseModel):
-    upload_folders: list[DirectoryPath]
+    upload_folders: list[DirectoryPath] = []
 
 class ServerSettings(BaseModel):
-    general: _ServerSettingsGeneral
-    server: _ServerSettingsServer
-    tv: _ServerSettingsTV
-    video: _ServerSettingsVideo
-    capture: _ServerSettingsCapture
+    general: _ServerSettingsGeneral = _ServerSettingsGeneral()
+    server: _ServerSettingsServer = _ServerSettingsServer()
+    tv: _ServerSettingsTV = _ServerSettingsTV()
+    video: _ServerSettingsVideo = _ServerSettingsVideo()
+    capture: _ServerSettingsCapture = _ServerSettingsCapture()
 
 
 # サーバー設定データと読み込み・保存用の関数
