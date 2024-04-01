@@ -67,12 +67,4 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # おそらく使われることのない、Untagged なイメージをすべて削除する
-      # ref: https://github.com/vlaurin/action-ghcr-prune
-      - name: Prune Untagged Docker Images
-        uses: vlaurin/action-ghcr-prune@v0.6.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          container: konomitv
-          dry-run: false
-          prune-untagged: true
+      # public repo => free image repo
