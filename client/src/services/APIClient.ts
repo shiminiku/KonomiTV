@@ -33,13 +33,13 @@ export interface IErrorResponse {
  * HTTP リクエスト自体が失敗した場合は、detail に AxiosError のエラーメッセージが入る
  */
 export interface IErrorResponseData {
-    detail: string | {
+    detail: string | [{
         type: string;
         loc: (string | number)[];
         msg: string;
         input?: any;
         url?: string;
-    }
+    }]
 }
 
 
@@ -231,8 +231,25 @@ class APIClient {
                 Message.error(`${template}\nログインセッションに紐づくユーザーが存在しないか、削除されています。`);
                 return;
             }
+            case 'Don\'t have permission to access this resource': {
+                Message.error(`${template}\nこのリソースにアクセスする権限がありません。`);
+                return;
+            }
             default: {
-                if (Number.isNaN(error_response.status)) {
+                if (Array.isArray(error_response.data.detail)) {
+                    // バリデーションエラーが発生した場合
+                    // error_response.data.detail が配列の場合は、バリデーションエラーが発生したとみなす
+                    // FastAPI が返すバリデーションエラーのレスポンスを整形して、エラーメッセージを表示する
+                    let message = '';
+                    for (const error of error_response.data.detail) {
+                        // いい感じに loc を整形して、コードっぽくする
+                        const loc = error.loc.map(item => typeof item === 'number' ? `[${item}]` : item).join('.')
+                            .replaceAll('.[', '[').replaceAll('body.', '').replaceAll('query.', '');
+                        message += `⚠️ ${loc}: ${error.msg.replace('Value error, ', '')}\n`;
+                    }
+                    Message.error(`${template}\n${message}`);
+                    return;
+                } else if (Number.isNaN(error_response.status)) {
                     // HTTP リクエスト自体が失敗し、HTTP ステータスコードが取得できなかった場合
                     if (error_response.error.code === AxiosError.ECONNABORTED) {
                         // ネットワーク接続エラーの場合
