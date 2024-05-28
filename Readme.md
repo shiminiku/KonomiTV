@@ -318,7 +318,7 @@ rkmppenc のサポートは試験的なものです。また、Rockchip 製 ARM 
 # Mali GPU Driver のインストール (RK3588/RK3588S 向け)
 ## 他の Rockchip SoC の Mali GPU Driver は https://github.com/tsukumijima/libmali-rockchip/releases から入手できる
 ## RK3588/RK3588S の場合、g610-g6p0 より g610-g13p0 の方が高速に動作する
-wget https://github.com/tsukumijima/libmali-rockchip/releases/download/v1.9-1-2d267b0/libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
+wget https://github.com/tsukumijima/libmali-rockchip/releases/download/v1.9-1-55611b0/libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 sudo apt install -y ./libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 rm libmali-valhall-g610-g13p0-wayland-gbm_1.9-1_arm64.deb
 
@@ -359,7 +359,7 @@ KonomiTV を共有したい家族や親戚に Tailscale アカウントを作成
 この記事のとおりにセットアップすれば、あとは各デバイスで Tailscale での VPN 接続をオンにしておくだけです。
 
 **KonomiTV での利用以外にも、EDCB Material WebUI や EPGStation などの、プライベートネットワーク上の Web サーバーに家の外からアクセスするときにとても便利なサービスです。**  
-20台までは無料ですし (逸般の誤家庭でなければ十分すぎる)、この機会に導入しておくことをおすすめします。
+100台までは無料ですし (逸般の誤家庭でなければ十分すぎる)、この機会に導入しておくことをおすすめします。
 
 <img width="100%" src="https://user-images.githubusercontent.com/39271166/201460497-7f0b951a-5495-40cd-95af-32cc2146d991.png"><br>
 
@@ -453,7 +453,8 @@ KonomiTV の Windows サービスを一般ユーザーの権限で起動する�
 **Linux 向けの KonomiTV には、通常のインストール方法と、Docker を使ったインストール方法の 2 通りがあります。**  
 
 **通常のインストール方法では、事前に [PM2](https://PM2.keymetrics.io/docs/usage/quick-start/) と [Node.js](https://github.com/nodesource/distributions) (PM2 の動作に必要) のインストールが必要です。**  
-[Mirakurun](https://github.com/Chinachu/Mirakurun) や [EPGStation](https://github.com/l3tnun/EPGStation) を Docker を使わずにインストールしているなら、すでにインストールされているはずです。
+[Mirakurun](https://github.com/Chinachu/Mirakurun) や [EPGStation](https://github.com/l3tnun/EPGStation) を Docker を使わずにインストールしているなら、すでにインストールされているはずです。  
+また、インストーラーの実行時に `lshw` コマンドが必要です。`lshw` がインストールされていない場合は、適宜インストールしてください。
 
 **Docker を使ったインストール方法では、事前に [Docker](https://docs.docker.com/engine/install/) と [Docker Compose](https://docs.docker.com/compose/install/) のインストールが必要です。**  
 Docker Compose は V1 と V2 の両方に対応していますが、できれば V2 (ハイフンなしの `docker compose` コマンド) が使えるようにしておくことをおすすめします。  
@@ -473,12 +474,13 @@ Docker Compose は V1 と V2 の両方に対応していますが、できれば
 > [!NOTE]  
 > Docker を使ってインストールする場合、動作環境によっては `getaddrinfo EAI_AGAIN registry.yarnpkg.com` といったエラーで Docker イメージのビルドに失敗することがあります。  
 > Docker の DNS 設定がおかしかったり、Docker が書き換える iptables の定義が壊れてしまっていることが原因のようで、解決方法は千差万別です。  
-> KonomiTV は通常のインストール方法でも極力環境を汚さないように開発されています。Docker を使わずに通常通りインストールしたほうが早いかもしれません。
+> KonomiTV は通常のインストール方法でも極力環境を汚さないように開発されています。Docker を使わずに通常通りインストールしたほうが早いかもしれません。  
+> 参考: https://e-tipsmemo.hatenablog.com/entry/2024/04/07/000000
 
 <img width="100%" src="https://user-images.githubusercontent.com/39271166/201463450-96bb686e-c5bb-493d-b907-57b5f51ac986.png"><br>
 
 ```bash
-curl -LO https://github.com/tsukumijima/KonomiTV/releases/download/v0.9.0/KonomiTV-Installer.elf
+curl -LO https://github.com/tsukumijima/KonomiTV/releases/download/v0.10.0/KonomiTV-Installer.elf
 chmod a+x KonomiTV-Installer.elf
 ./KonomiTV-Installer.elf
 ```
@@ -506,6 +508,13 @@ chmod a+x KonomiTV-Installer.elf
 
 KonomiTV サーバーは Windows サービス (Windows) / PM2 サービス (Linux) / Docker サービス (Linux-Docker) としてインストールされているので、サーバー PC を再起動したあとも自動的に起動します。  
 もし再起動後に KonomiTV にアクセスできない場合は、`server/logs/KonomiTV-Server.log` に出力されているエラーメッセージを確認してください。
+
+> [!TIP]  
+> ぜひこの機会に KonomiTV の公式 Twitter をフォローしていただけると嬉しいです！  
+> KonomiTV の開発進捗やユーザーのみなさんへのお知らせなどを随時ツイートしています。  
+> 各種 Tips もツイートしていますので、もし導入時に分からない箇所があれば、一度ツイートを検索してみると解決策が見つかるかもしれません。
+> 
+> [![Twitter](https://img.shields.io/twitter/follow/KonomiTV?style=social)](https://twitter.com/TVRemotePlus)
 
 ### デスクトップアプリ・スマホアプリとして使う
 
@@ -586,15 +595,20 @@ aa-bb-cc-dd の部分には、ローカル IP アドレスのうち、. (ドッ�
 
 **KonomiTV のサーバー設定は、KonomiTV をインストールしたフォルダにある config.yaml に保存されています。**  
 
+> [!IMPORTANT]  
+> **KonomiTV 0.10.0 以降では、サーバー設定を KonomiTV の UI 上で変更できるようになりました！**  
+> サーバー設定を変更するには、管理者権限を持つ KonomiTV アカウントでログインし、[設定] → [サーバー設定] に移動してください。  
+> KonomiTV サーバー内で一番最初に作成された KonomiTV アカウントには、既定で管理者権限が付与されています。
+
 > [!WARNING]  
 > 0.7.1 以前に利用されていた config.yaml と 0.8.0 以降で利用されている config.yaml は、フォーマットの互換性がありません。  
 > KonomiTV は開発中のため、今後も設定ファイルの破壊的変更が発生する可能性があります。
 
-> [!NOTE]  
-> config.example.yaml は、config.yaml のデフォルトの設定を記載した、config.yaml のひな形となるファイルです。アップデート時に上書きされるため、config.example.yaml は編集しないでください。  
+> [!WARNING]  
+> config.example.yaml は、config.yaml のデフォルトの設定を記載した、config.yaml のひな形となるファイルです。  
+> アップデート時に上書きされるため、config.example.yaml は編集しないでください。  
 
 **config.yaml は、インストーラーでインストールした際に自動的に生成されます。**  
-**現時点では、サーバー設定の変更には config.yaml 内の記述を直接編集する必要があります。** 将来のバージョンでは GUI からサーバー設定を変更できるようにする予定です。
 
 以下は主要な設定項目の説明です。  
 ほかにも設定項目はありますが、基本的に変更の必要はありません。
@@ -857,13 +871,6 @@ poetry env use /Develop/KonomiTV/server/thirdparty/Python/bin/python
 
 # 依存パッケージのインストール
 poetry install --no-root
-
-# データベースのアップグレード
-## SQLite の仕様上後からのテーブル定義の変更が難しいため、
-## 開発版 KonomiTV では Aerich のマイグレーションファイル (server/app/migrations/models/ 以下) 自体が後から変更されることがある
-## その場合は手動で server/data/database.sqlite のテーブル定義を変更するか、
-## poetry run aerich downgrade で一つ前の状態に戻してから、再度 poetry run aerich upgrade を実行する必要がある
-poetry run aerich upgrade
 ```
 
 ### サーバーの起動

@@ -2,6 +2,7 @@
 import asyncio
 import atexit
 import tortoise.contrib.fastapi
+import tortoise.log
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi import status
@@ -21,6 +22,7 @@ from app.constants import (
     QUALITY,
     VERSION,
 )
+from app.logging import logger
 from app.models.Channel import Channel
 from app.models.Program import Program
 from app.models.TwitterAccount import TwitterAccount
@@ -32,8 +34,8 @@ from app.routers import (
     MaintenanceRouter,
     NiconicoRouter,
     ProgramsRouter,
-    ReservesRouter,
-    ReserveConditionsRouter,
+    ReservationConditionsRouter,
+    ReservationsRouter,
     SeriesRouter,
     SettingsRouter,
     TwitterRouter,
@@ -59,10 +61,10 @@ except AssertionError:
 app = FastAPI(
     title = 'KonomiTV',
     description = 'KonomiTV: Kept Organized, Notably Optimized, Modern Interface TV media server',
+    version = VERSION,
     openapi_url = '/api/openapi.json',
     docs_url = '/api/docs',
     redoc_url = '/api/redoc',
-    version = VERSION,
 )
 
 # ルーターの追加
@@ -72,8 +74,8 @@ app.include_router(VideosRouter.router)
 app.include_router(SeriesRouter.router)
 app.include_router(LiveStreamsRouter.router)
 app.include_router(VideoStreamsRouter.router)
-app.include_router(ReservesRouter.router)
-app.include_router(ReserveConditionsRouter.router)
+app.include_router(ReservationsRouter.router)
+app.include_router(ReservationConditionsRouter.router)
 app.include_router(CapturesRouter.router)
 app.include_router(DataBroadcastingRouter.router)
 app.include_router(NiconicoRouter.router)
@@ -84,14 +86,13 @@ app.include_router(MaintenanceRouter.router)
 app.include_router(VersionRouter.router)
 
 # CORS の設定
+## デバッグモード時のみ全てのオリジンからのリクエストを許可 (クライアント側の開発サーバーからのアクセスに必要)
+CORS_ORIGINS = ['*'] if CONFIG.general.debug is True else []
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = [
-        # デバッグモード時のみ CORS ヘッダーを有効化 (クライアント側の開発サーバーからのアクセスに必要)
-        '*' if CONFIG.general.debug is True else '',
-    ],
-    allow_methods = ["*"],
-    allow_headers = ["*"],
+    allow_origins = CORS_ORIGINS,
+    allow_methods = CORS_ORIGINS,
+    allow_headers = CORS_ORIGINS,
     allow_credentials = True,
 )
 
@@ -153,14 +154,15 @@ async def ExceptionHandler(request: Request, exc: Exception):
         {'detail': f'Oops! {type(exc).__name__} did something. There goes a rainbow...'},
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
         # FastAPI の謎仕様で CORSMiddleware は exception_handler に対しては効かないので、ここで自前で CORS ヘッダーを付与する
-        headers = {'Access-Control-Allow-Origin': '*'},
+        headers = {'Access-Control-Allow-Origin': CORS_ORIGINS[0] if len(CORS_ORIGINS) > 0 else ''},
     )
 
 # Tortoise ORM の初期化
-## ロガーを Uvicorn に統合する
+## Tortoise ORM が利用するロガーを Uvicorn のロガーに差し替える
 ## ref: https://github.com/tortoise/tortoise-orm/issues/529
-tortoise.contrib.fastapi.logging = logging.logger  # type: ignore
-## Tortoise ORM を登録する
+tortoise.log.logger = logger
+tortoise.log.db_client_logger = logger
+## Tortoise ORM を FastAPI に登録する
 ## ref: https://tortoise-orm.readthedocs.io/en/latest/contrib/fastapi.html
 tortoise.contrib.fastapi.register_tortoise(
     app = app,
