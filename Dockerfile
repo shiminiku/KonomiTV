@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends aria2 ca-certif
 ## サードパーティーライブラリは変更が少ないので、先にダウンロード処理を実行してビルドキャッシュを効かせる
 WORKDIR /
 ## リリース版用
-RUN aria2c -x10 https://github.com/tsukumijima/KonomiTV/releases/download/v0.10.0/thirdparty-linux.tar.xz
+RUN aria2c -x10 https://github.com/tsukumijima/KonomiTV/releases/download/v0.10.1/thirdparty-linux.tar.xz
 RUN tar xvf thirdparty-linux.tar.xz
 ## 開発版 (0.x.x-dev) 用
 # RUN aria2c -x10 https://nightly.link/tsukumijima/KonomiTV/actions/runs/9164924503/thirdparty-linux.tar.xz.zip
@@ -62,6 +62,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Intel QSV と AMD VCE 関連のライブラリのインストール（実行時イメージなので RUN の最後に掃除する）
 ## amdgpu 周りのインストール方法は amdgpu-install パッケージに同梱されているファイル群を参考にした
+## ref: https://dgpu-docs.intel.com/driver/client/overview.html
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git gpg tzdata && \
     apt-get -y autoremove && \
     apt-get -y clean && \

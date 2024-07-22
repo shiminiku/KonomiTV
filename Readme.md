@@ -251,12 +251,13 @@ QSVEncC では、別途 Intel Media Driver のインストールが必要です�
 > なお、Windows 版の Intel QSV は、Haswell (第4世代) 以下の CPU でも利用できます。
 
 ```bash
-curl -fsSL https://repositories.intel.com/graphics/intel-graphics.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/intel-graphics-keyring.gpg
 
 # Ubuntu 22.04 LTS
-echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics-keyring.gpg] https://repositories.intel.com/graphics/ubuntu jammy arc' | sudo tee /etc/apt/sources.list.d/intel-graphics.list > /dev/null
-# Ubuntu 20.04 LTS
-echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics-keyring.gpg] https://repositories.intel.com/graphics/ubuntu focal-devel main' | sudo tee /etc/apt/sources.list.d/intel-graphics.list > /dev/null
+curl -fsSL https://repositories.intel.com/gpu/intel-graphics.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/intel-graphics-keyring.gpg
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics-keyring.gpg] https://repositories.intel.com/gpu/ubuntu jammy client' | sudo tee /etc/apt/sources.list.d/intel-graphics.list > /dev/null
+# Ubuntu 20.04 LTS (対応する GPG 鍵のダウンロード URL が微妙に異なる)
+curl -fsSL https://repositories.intel.com/graphics/intel-graphics.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/intel-graphics-keyring.gpg
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics-keyring.gpg] https://repositories.intel.com/gpu/ubuntu focal client' | sudo tee /etc/apt/sources.list.d/intel-graphics.list > /dev/null
 
 sudo apt update && sudo apt install -y intel-media-va-driver-non-free intel-opencl-icd libmfxgen1
 ```
@@ -480,7 +481,7 @@ Docker Compose は V1 と V2 の両方に対応していますが、できれば
 <img width="100%" src="https://user-images.githubusercontent.com/39271166/201463450-96bb686e-c5bb-493d-b907-57b5f51ac986.png"><br>
 
 ```bash
-curl -LO https://github.com/tsukumijima/KonomiTV/releases/download/v0.10.0/KonomiTV-Installer.elf
+curl -LO https://github.com/tsukumijima/KonomiTV/releases/download/v0.10.1/KonomiTV-Installer.elf
 chmod a+x KonomiTV-Installer.elf
 ./KonomiTV-Installer.elf
 ```
