@@ -15,14 +15,16 @@ from app.models.Channel import Channel
 from app.routers.ReservationsRouter import DecodeEDCBRecSettingData
 from app.routers.ReservationsRouter import EncodeEDCBRecSettingData
 from app.routers.ReservationsRouter import GetCtrlCmdUtil
-from app.utils.EDCB import AutoAddData
-from app.utils.EDCB import AutoAddDataRequired
-from app.utils.EDCB import ContentData
-from app.utils.EDCB import CtrlCmdUtil
-from app.utils.EDCB import RecSettingData
-from app.utils.EDCB import SearchDateInfoRequired
-from app.utils.EDCB import SearchKeyInfo
-from app.utils.EDCB import SearchKeyInfoRequired
+from app.utils.edcb import (
+    AutoAddData,
+    AutoAddDataRequired,
+    ContentData,
+    RecSettingData,
+    SearchDateInfoRequired,
+    SearchKeyInfo,
+    SearchKeyInfoRequired,
+)
+from app.utils.edcb.CtrlCmdUtil import CtrlCmdUtil
 
 
 # ルーター
@@ -384,15 +386,15 @@ async def GetDefaultServiceRanges() -> list[schemas.ProgramSearchConditionServic
     channels = await Channel.filter(is_watchable=True).order_by('channel_number').order_by('remocon_id')
 
     # チャンネルタイプごとにグループ化
-    ground_channels: dict[Literal['GR', 'BS', 'CS', 'CATV', 'SKY', 'STARDIGIO'], list[Channel]] = {}
+    ground_channels: dict[Literal['GR', 'BS', 'CS', 'CATV', 'SKY', 'BS4K'], list[Channel]] = {}
     for channel in channels:
         if channel.type not in ground_channels:
             ground_channels[channel.type] = []
         ground_channels[channel.type].append(channel)
 
-    # 地上波・BS・110度CS・CATV・124/128度CS・スターデジオの順に連結
+    # 地上波・BS・110度CS・CATV・124/128度CS・BS4K の順に連結
     sorted_channels: list[Channel] = []
-    for channel_type in ['GR', 'BS', 'CS', 'CATV', 'SKY', 'STARDIGIO']:
+    for channel_type in ['GR', 'BS', 'CS', 'CATV', 'SKY', 'BS4K']:
         if channel_type in ground_channels:
             sorted_channels.extend(ground_channels[channel_type])
 

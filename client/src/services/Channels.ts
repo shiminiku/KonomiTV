@@ -4,10 +4,10 @@ import { IProgram, IProgramDefault } from '@/services/Programs';
 
 
 /** チャンネルタイプの型 */
-export type ChannelType = 'GR' | 'BS' | 'CS' | 'CATV' | 'SKY' | 'STARDIGIO';
+export type ChannelType = 'GR' | 'BS' | 'CS' | 'CATV' | 'SKY' | 'BS4K';
 
 // チャンネルタイプの型 (実際のチャンネルリストに表示される表現)
-export type ChannelTypePretty = 'ピン留め' | '地デジ' | 'BS' | 'CS' | 'CATV' | 'SKY' | 'StarDigio';
+export type ChannelTypePretty = 'ピン留め' | '地デジ' | 'BS' | 'CS' | 'CATV' | 'SKY' | 'BS4K';
 
 /** チャンネル情報を表すインターフェイス */
 export interface IChannel {
@@ -63,14 +63,16 @@ export interface ILiveChannelsList {
     CS: ILiveChannel[];
     CATV: ILiveChannel[];
     SKY: ILiveChannel[];
-    STARDIGIO: ILiveChannel[];
+    BS4K: ILiveChannel[];
 }
 
-/** ニコニコ実況のセッション情報を表すインターフェイス */
-export interface IJikkyoSession {
-    is_success: boolean;
-    audience_token: string | null;
-    detail: string;
+/** ニコニコ実況の WebSocket API の情報を表すインターフェイス */
+export interface IJikkyoWebSocketInfo {
+    watch_session_url: string | null;
+    nicolive_watch_session_url: string | null;
+    nicolive_watch_session_error: string | null;
+    comment_session_url: string | null;
+    is_nxjikkyo_exclusive: boolean;
 }
 
 
@@ -117,18 +119,18 @@ class Channels {
 
 
     /**
-     * 指定したチャンネルに紐づくニコニコ実況のセッション情報を取得する
+     * 指定されたチャンネルに対応する、ニコニコ実況・NX-Jikkyo とコメントを送受信するための WebSocket API の情報を取得する
      * @param channel_id チャンネル ID (id or display_channel_id)
-     * @return 指定したチャンネルに紐づくニコニコ実況のセッション情報
+     * @return ニコニコ実況・NX-Jikkyo とコメントを送受信するための WebSocket API の情報
      */
-    static async fetchJikkyoSession(channel_id: string): Promise<IJikkyoSession | null> {
+    static async fetchWebSocketInfo(channel_id: string): Promise<IJikkyoWebSocketInfo | null> {
 
         // API リクエストを実行
-        const response = await APIClient.get<IJikkyoSession>(`/channels/${channel_id}/jikkyo`);
+        const response = await APIClient.get<IJikkyoWebSocketInfo>(`/channels/${channel_id}/jikkyo`);
 
         // エラー処理
         if (response.type === 'error') {
-            APIClient.showGenericError(response, 'ニコニコ実況のセッション情報を取得できませんでした。');
+            APIClient.showGenericError(response, 'コメント送受信用 WebSocket API の情報を取得できませんでした。');
             return null;
         }
 
