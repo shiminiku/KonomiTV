@@ -18,10 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends aria2 ca-certif
 ## サードパーティーライブラリは変更が少ないので、先にダウンロード処理を実行してビルドキャッシュを効かせる
 WORKDIR /
 ## リリース版用
-RUN aria2c -x10 https://github.com/tsukumijima/KonomiTV/releases/download/v0.11.0/thirdparty-linux.tar.xz
+RUN aria2c -x10 https://github.com/tsukumijima/KonomiTV/releases/download/v0.12.0/thirdparty-linux.tar.xz
 RUN tar xvf thirdparty-linux.tar.xz
 ## 開発版 (0.x.x-dev) 用
-# RUN aria2c -x10 https://nightly.link/tsukumijima/KonomiTV/actions/runs/10714539752/thirdparty-linux.tar.xz.zip
+# RUN aria2c -x10 https://nightly.link/tsukumijima/KonomiTV/actions/runs/13269769043/thirdparty-linux.tar.xz.zip
 # RUN unzip thirdparty-linux.tar.xz.zip && tar xvf thirdparty-linux.tar.xz
 
 # --------------------------------------------------------------------------------------------------------------
@@ -64,6 +64,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ## amdgpu 周りのインストール方法は amdgpu-install パッケージに同梱されているファイル群を参考にした
 ## ref: https://dgpu-docs.intel.com/driver/client/overview.html
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git gpg tzdata && \
+    apt-get upgrade -y && \
     apt-get -y autoremove && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/* && \
@@ -91,4 +92,4 @@ COPY --from=client-builder /code/client/dist/ /code/client/dist/
 COPY ./config.example.yaml /code/config.example.yaml
 
 # KonomiTV サーバーを起動
-ENTRYPOINT /code/server/.venv/bin/python KonomiTV.py
+ENTRYPOINT ["/code/server/.venv/bin/python", "KonomiTV.py"]
