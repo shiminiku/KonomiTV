@@ -50,8 +50,8 @@ RUN yarn build
 # ここで作成された実行時イメージが docker compose up -d で起動される
 # --------------------------------------------------------------------------------------------------------------
 
-# Ubuntu 22.04 LTS (with CUDA) をベースイメージとして利用
-# CUDA 付きなのは NVEncC を動かせるようにするため
+# しません # Ubuntu 22.04 LTS (with CUDA) をベースイメージとして利用
+# しません # CUDA 付きなのは NVEncC を動かせるようにするため
 FROM ubuntu:22.04
 
 # タイムゾーンを東京に設定
@@ -60,9 +60,9 @@ ENV TZ=Asia/Tokyo
 # apt-get に対話的に設定を確認されないための設定
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Intel QSV と AMD VCE 関連のライブラリのインストール（実行時イメージなので RUN の最後に掃除する）
-## amdgpu 周りのインストール方法は amdgpu-install パッケージに同梱されているファイル群を参考にした
-## ref: https://dgpu-docs.intel.com/driver/client/overview.html
+# しません # Intel QSV と AMD VCE 関連のライブラリのインストール（実行時イメージなので RUN の最後に掃除する）
+# しません ## amdgpu 周りのインストール方法は amdgpu-install パッケージに同梱されているファイル群を参考にした
+# しません ## ref: https://dgpu-docs.intel.com/driver/client/overview.html
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git gpg tzdata && \
     apt-get upgrade -y && \
     apt-get -y autoremove && \
